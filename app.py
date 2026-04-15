@@ -1,98 +1,77 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-from sklearn.linear_model import LogisticRegression
 import requests
 from bs4 import BeautifulSoup, Comment
 import re
 
-# --- 1. 모델 학습 데이터 및 엔진 세팅 ---
-@st.cache_resource
-def train_hof_model():
-    # 헌액자(1)와 미헌액자(0) 균형을 맞춘 훈련 데이터
-    data = [
-        ("Derek Jeter", 165.0, 71.3, 1), ("Greg Maddux", 320.0, 106.6, 1),
-        ("Mike Mussina", 135.0, 82.8, 1), ("Pedro Martinez", 195.0, 83.9, 1),
-        ("Tony Gwynn", 180.0, 69.2, 1), ("Chipper Jones", 185.0, 85.3, 1),
-        ("Scott Rolen", 150.0, 70.1, 1), ("Todd Helton", 175.0, 61.8, 1),
-        ("Curt Schilling", 170.0, 80.5, 0), ("Lou Whitaker", 110.0, 75.1, 0),
-        ("Bobby Grich", 95.0, 71.1, 0), ("Kenny Lofton", 105.0, 68.4, 0),
-        ("Jim Edmonds", 90.0, 60.4, 0), ("Bernie Williams", 85.0, 49.6, 0),
-        ("Johan Santana", 85.0, 51.7, 0), ("Dustin Pedroia", 95.0, 51.9, 0)
-    ]
-    df = pd.DataFrame(data, columns=["name", "HOFm", "WAR", "elected"])
-    model = LogisticRegression(class_weight='balanced', C=0.5)
-    model.fit(df[["HOFm", "WAR"]], df["elected"])
-    return model
-
-# --- 2. 실시간 데이터 스크래핑 함수 ---
-def fetch_player_stats(query_name):
+# --- 1. 데이터 수집 함수 (더 강력한 버전) ---
+def fetch_player_data_fix(query_name):
     query = query_name.replace(" ", "+")
     url = f"https://www.baseball-reference.com/search/search.fcgi?search={query}"
-    res = requests.get(url, timeout=10)
     
-    # 주석 내부 데이터까지 파싱
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
+    res = requests.get(url, headers=headers, timeout=10)
+    
+    # 1. 주석 데이터 강제 결합 (많은 지표가 주석 안에 숨어있음)
     soup = BeautifulSoup(res.text, "html.parser")
     comments = soup.find_all(string=lambda text: isinstance(text, Comment))
-    full_soup = BeautifulSoup(res.text + "".join(comments), "html.parser")
+    full_html = res.text + "".join(comments)
+    full_soup = BeautifulSoup(full_html, "html.parser")
 
-    def get_stat(label):
-        tag = full_soup.find(lambda t: t.name == "strong" and label in t.text)
-        if tag:
-            text = tag.parent.get_text()
-            match = re.search(r"(\d+\.\d+|\d+)", text)
-            return float(match.group(1)) if match else 0.0
+    # 2. 이름 추출
+    name_tag = full_soup.find("h1")
+    p_name = name_tag.text.strip() if name_tag else query_name
+
+    # 3. WAR 및 HOFm 추출 (정규식 강화)
+    def extract_val(label):
+        # "Hall of Fame Monitor", "WAR" 등의 텍스트 바로 뒤의 숫자를 찾음
+        target = full_soup.find(string=re.compile(label))
+        if target:
+            parent_text = target.parent.get_text()
+            # 숫자(소수점 포함)만 골라내기
+            match = re.search(r"(\d+\.\d+|\d+)", parent_text)
+            if match:
+                return float(match.group(1))
         return 0.0
 
-    hofm = get_stat("Hall of Fame Monitor")
-    war = get_stat("WAR")
-    p_name = full_soup.find("h1").text.strip() if full_soup.find("h1") else query_name
+    war = extract_val("WAR")
+    hofm = extract_val("Hall of Fame Monitor")
+    
     return p_name, hofm, war
 
-# --- 3. Streamlit UI 레이아웃 ---
-st.set_page_config(page_title="MLB HOF 확률 진단기", layout="centered")
+# --- 2. 득표율 시뮬레이션 로직 ---
+def get_shares(hofm, war):
+    # 트라웃급 지표면 무조건 높은 점수
+    first = (hofm * 0.4) + (war * 0.3) + 20
+    final = first + (10 if war > 60 else 5)
+    return min(99.9, max(1.0, first)), min(99.9, max(1.0, final))
 
-# 모델 준비
-model = train_hof_model()
+# --- 3. UI 구성 ---
+st.title("🏛️ MLB HOF 통합 진단기")
 
-st.title("🏛️ MLB HOF AI 확률 진단기")
-st.markdown("선수의 이름을 입력하면 AI가 명예의 전당 헌액 확률을 진단합니다.")
+name_input = st.text_input("선수 영문 이름을 입력하세요", placeholder="Mike Trout")
 
-# 입력 섹션
-player_input = st.text_input("선수 영문 이름 입력 (예: Buster Posey, Ichiro Suzuki)", "")
-
-if player_input:
+if name_input:
     with st.spinner("데이터 분석 중..."):
         try:
-            name, hofm, war = fetch_player_stats(player_input)
+            name, hof_score, war_score = fetch_player_data_fix(name_input)
             
-            # 확률 계산
-            prob = model.predict_proba([[hofm, war]])[0, 1]
-            prob_pct = prob * 100
-
-            st.divider()
-            
-            # 결과 표시
-            st.header(f"⚾ 분석 결과: {name}")
-            col1, col2, col3 = st.columns(3)
-            col1.metric("HOF Monitor", f"{hofm}")
-            col2.metric("Career WAR", f"{war}")
-            col3.metric("AI 확률", f"{prob_pct:.1f}%")
-
-            # 판정 로직
-            if prob >= 0.75:
-                st.success(f"🏆 **판정: 헌액 유력 (LOCK)**")
-                st.balloons()
-            elif prob >= 0.4:
-                st.warning(f"⚾ **판정: 경계선 (Borderline)**")
+            # 둘 다 0이면 검색 실패로 간주
+            if hof_score == 0 and war_score == 0:
+                st.error("데이터를 찾을 수 없습니다. 철자를 확인하거나 다른 선수를 입력해 주세요.")
             else:
-                st.error(f"❌ **판정: 입성 불투명 (Low Probability)**")
-            
-            st.info(f"지표 가이드: {name} 선수는 성적 기반 AI 모델에서 {prob_pct:.1f}%의 일치율을 보였습니다.")
-
+                f_share, l_share = get_shares(hof_score, war_score)
+                
+                st.header(f"⚾ {name}")
+                c1, c2 = st.columns(2)
+                c1.metric("HOF Monitor", hof_score)
+                c2.metric("Career WAR", war_score)
+                
+                st.subheader("🗳️ 예상 득표율")
+                st.write(f"1년 차: {f_share:.1f}%")
+                st.progress(f_share / 100)
+                st.write(f"최종 예상: {l_share:.1f}%")
+                st.progress(l_share / 100)
+                
         except Exception as e:
-            st.error("데이터를 불러오지 못했습니다. 이름을 다시 확인해 주세요.")
-
-else:
-    st.write("---")
-    st.caption("※ 본 엔진은 약물/도박 등 외적 논란을 배제한 통계 중심 모델입니다.")
+            st.error(f"오류 발생: {e}")
