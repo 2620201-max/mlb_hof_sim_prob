@@ -1,76 +1,69 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import requests
-from bs4 import BeautifulSoup, Comment
-import re
 from sklearn.linear_model import LogisticRegression
 
-# --- 1. 모델 학습 ---
+# --- 1. AI 모델 학습 (고정 데이터) ---
 @st.cache_resource
 def train_hof_model():
-    X = np.array([[165, 71], [320, 106], [170, 80], [110, 75], [95, 51], [85, 40], [50, 30]])
-    y = np.array([1, 1, 0, 0, 0, 0, 0])
-    return LogisticRegression(class_weight='balanced').fit(X, y)
+    # 학습 데이터: [HOF Monitor, WAR]
+    X = np.array([
+        [165, 71], [320, 106], [170, 80], [110, 75], 
+        [95, 51], [85, 40], [50, 30], [250, 110], [200, 90]
+    ])
+    y = np.array([1, 1, 0, 0, 0, 0, 0, 1, 1]) # 1: 헌액, 0: 탈락
+    model = LogisticRegression(class_weight='balanced').fit(X, y)
+    return model
 
-# --- 2. 데이터 수집 (검색 목록 강제 돌파 버전) ---
-def fetch_player_data(query_name):
-    query = query_name.strip().replace(" ", "+")
-    search_url = f"https://www.baseball-reference.com/search/search.fcgi?search={query}"
-    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
-    
-    res = requests.get(search_url, headers=headers, timeout=10)
-    
-    # [핵심] 만약 검색 결과 목록 페이지가 떴다면 (URL에 search.fcgi가 그대로 남아있다면)
-    if "search.fcgi" in res.url:
-        soup = BeautifulSoup(res.text, "html.parser")
-        # 'search_results' 또는 'players' ID를 가진 영역에서 첫 번째 결과 추출
-        search_div = soup.find("div", id="players") or soup.find("div", class_="search-item-url")
-        if search_div and search_div.find("a"):
-            first_link = search_div.find("a")['href']
-            # 만약 링크가 상대 경로라면 절대 경로로 변환
-            target_url = first_link if first_link.startswith("http") else f"https://www.baseball-reference.com{first_link}"
-            res = requests.get(target_url, headers=headers, timeout=10)
-
-    # 데이터 파싱
-    full_html = res.text + "".join(BeautifulSoup(res.text, "html.parser").find_all(string=lambda text: isinstance(text, Comment)))
-    full_soup = BeautifulSoup(full_html, "html.parser")
-
-    # 이름, HOFm, WAR 추출
-    p_name = full_soup.find("h1").get_text(strip=True) if full_soup.find("h1") else query_name
-    
-    def extract(label):
-        tag = full_soup.find(string=re.compile(label))
-        if tag:
-            match = re.search(r"(\d+\.\d+|\d+)", tag.parent.get_text())
-            return float(match.group(1)) if match else 0.0
-        return 0.0
-
-    return p_name, extract("Hall of Fame Monitor"), extract("WAR")
-
-# --- 3. UI ---
-st.title("🏛️ MLB HOF AI 통합 진단기")
+# --- 2. UI 구성 ---
+st.set_page_config(page_title="MLB HOF 확률 진단기", layout="centered")
 model = train_hof_model()
 
-name_input = st.text_input("영문 이름을 입력하세요 (예: Mike Trout)", "")
+st.title("🏛️ MLB 명예의 전당 AI 진단기")
+st.markdown("사이트 차단 문제로 인해 **직접 수치를 입력하는 방식**으로 긴급 변경되었습니다.")
 
-if name_input:
-    with st.spinner("쿠퍼스타운에서 데이터를 찾는 중..."):
-        try:
-            name, hofm, war = fetch_player_data(name_input)
-            
-            # 둘 다 0이면 정말 못 찾은 것
-            if hofm == 0 and war == 0:
-                st.warning(f"'{name_input}'의 핵심 데이터를 찾지 못했습니다. Mike Trout처럼 성과 이름을 모두 입력해 보세요.")
-            else:
-                st.success(f"데이터 로드 완료: {name}")
-                col1, col2 = st.columns(2)
-                col1.metric("HOF Monitor", hofm)
-                col2.metric("Career WAR", war)
+# 사용자 입력 섹션
+st.divider()
+st.subheader("선수 지표 입력")
+col1, col2 = st.columns(2)
 
-                prob = model.predict_proba([[hofm, war]])[0, 1] * 100
-                st.write(f"### 🔮 AI 분석 헌액 확률: {prob:.1f}%")
-                st.progress(prob / 100)
+with col1:
+    war = st.number_input("Career WAR (예: 트라웃 86.2)", min_value=0.0, max_value=200.0, value=70.0, step=0.1)
+with col2:
+    hofm = st.number_input("HOF Monitor (예: 트라웃 178)", min_value=0.0, max_value=500.0, value=100.0, step=1.0)
 
-        except Exception as e:
-            st.error(f"사이트 접속 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.")
+# 분석 버튼
+if st.button("AI 확률 분석 시작"):
+    # AI 확률 계산
+    prob = model.predict_proba([[hofm, war]])[0, 1] * 100
+    
+    # 득표율 시뮬레이션
+    first_ballot = min(99.9, (hofm * 0.4) + (war * 0.3) + 15)
+
+    st.divider()
+    st.header("🔮 분석 결과")
+    
+    # 메트릭 표시
+    c1, c2 = st.columns(2)
+    c1.metric("입성 확률", f"{prob:.1f}%")
+    c2.metric("예상 득표율", f"{first_ballot:.1f}%")
+
+    st.progress(prob / 100)
+
+    # 판정 메시지
+    if prob >= 75:
+        st.balloons()
+        st.success("🏆 **[LOCK]** 이 선수는 명예의 전당 입성이 확실시됩니다!")
+    elif prob >= 40:
+        st.warning("⚾ **[BORDERLINE]** 입성 가능성이 있는 경계선 선수입니다.")
+    else:
+        st.error("❌ **[UNLIKELY]** 현재 지표로는 입성이 어렵습니다.")
+
+    st.info(f"참고: 입력하신 WAR {war}와 HOF Monitor {hofm}을 기반으로 AI가 역대 헌액자 데이터와 대조한 결과입니다.")
+
+# 지표 찾는 법 안내
+st.divider()
+with st.expander("💡 선수의 WAR와 HOF Monitor는 어디서 보나요?"):
+    st.write("1. 구글에 '선수이름 + Baseball Reference' 검색")
+    st.write("2. 해당 사이트의 'Leaderboards & Awards' 섹션에서 **Hall of Fame Monitor** 확인")
+    st.write("3. 상단 메인 섹션에서 **WAR** 확인")
