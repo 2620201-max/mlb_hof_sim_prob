@@ -3,74 +3,69 @@ import pandas as pd
 import numpy as np
 from sklearn.linear_model import LogisticRegression
 
-# --- 1. AI 모델 학습 (역대 헌액자 전원 데이터 및 시대/포지션 특성 학습) ---
+# --- 1. AI 모델 학습 (다양한 유형의 HOFer 학습) ---
 @st.cache_resource
-def train_hof_ultimate_model():
-    # 데이터 구조: [Black Ink, Gray Ink, HOFm, HOFs, Career WAR, 7yr-Peak, JAWS]
+def train_hof_balanced_model():
+    # [Black, Gray, HOFm, HOFs, WAR, Peak, JAWS]
     X = np.array([
-        # [합격군] 타자/투수 전설 및 평균 헌액자
-        [40, 250, 180, 60, 86.2, 45.0, 65.6], [27, 144, 100, 50, 67.0, 43.0, 55.0],
-        [60, 300, 350, 75, 110.0, 60.0, 85.0], [45, 200, 150, 55, 75.0, 48.0, 61.5],
-        # [합격군] 투수 특화 데이터
-        [50, 250, 130, 55, 80.0, 55.0, 67.5], [35, 180, 100, 50, 70.0, 50.0, 60.0],
-        # [불합격군] 경계선 및 일반 선수
-        [10, 80, 85, 35, 55.0, 35.0, 45.0], [5, 60, 60, 30, 45.0, 30.0, 37.5],
-        [2, 30, 20, 15, 25.0, 18.0, 21.5], [15, 100, 95, 38, 52.0, 33.0, 42.5]
+        [60, 300, 350, 75, 110.0, 60.0, 85.0], # 1. 올타임 레전드 (누적+임팩트+세이버 완벽)
+        [30, 160, 150, 55, 75.0, 45.0, 60.0],  # 2. 정석적인 헌액자 (모든 지표 평균 이상)
+        [15, 120, 160, 48, 50.0, 38.0, 44.0],  # 3. 명성형 헌액자 (세페다 등: WAR 낮으나 HOFm 높음)
+        [10, 130, 80, 55, 70.0, 35.0, 52.5],   # 4. 누적형 헌액자 (임팩트 낮으나 통산 WAR 높음)
+        [12, 90, 90, 35, 62.0, 38.0, 50.0],    # 5. 세이버형 경계선 (WAR는 좋으나 수상 실적 부족)
+        [5, 60, 50, 30, 45.0, 30.0, 37.5],     # 6. 미달자 (모든 지표 부족)
+        [20, 100, 110, 40, 55.0, 42.0, 48.5]   # 7. 전성기형 경계선 (전성기는 좋으나 누적 부족)
     ])
-    y = np.array([1, 1, 1, 1, 1, 1, 0, 0, 0, 0])
-    return LogisticRegression(class_weight='balanced', max_iter=2000).fit(X, y)
+    y = np.array([1, 1, 1, 1, 0, 0, 1]) # 5번 같은 경우 실제 투표에서 고전하는 경향 반영
+    
+    # 모델의 안정성을 위해 C값과 solver 최적화
+    model = LogisticRegression(class_weight='balanced', C=0.2, max_iter=2000)
+    model.fit(X, y)
+    return model
 
-# --- 2. 기본 데이터 설정 ---
-model = train_hof_ultimate_model()
+model = train_hof_balanced_model()
+
+# --- 2. 공식 기준 데이터 ---
 STATS_AVG = {
     "타자": {"Black": 27, "Gray": 144, "HOFm": 100, "HOFs": 50, "WAR": 67.0, "Peak": 43.0, "JAWS": 55.0},
     "투수": {"Black": 40, "Gray": 185, "HOFm": 100, "HOFs": 50, "WAR": 73.0, "Peak": 50.0, "JAWS": 62.0}
 }
 
-# --- 3. UI 레이아웃 (v2.0 스타일) ---
-st.set_page_config(page_title="MLB HOF AI 진단기 v3.0", layout="centered")
+# --- 3. UI (v2.0 UI 유지) ---
+st.set_page_config(page_title="MLB HOF 통합 분석기 v3.3", layout="centered")
 st.title("🏛️ MLB 명예의 전당 AI 진단기")
 
-# 탭 구성
-tab1, tab2 = st.tabs(["🔍 HOF 정밀 진단", "📖 데이터 찾는 법"])
+pos = st.radio("포지션", ["타자", "투수"], horizontal=True)
+avg = STATS_AVG[pos]
+
+tab1, tab2 = st.tabs(["🔍 정밀 진단", "📊 데이터 가이드"])
 
 with tab1:
-    st.markdown("분석할 포지션과 시대를 선택한 후, **7대 지표**를 입력하세요.")
-    
-    # 설정 섹션
-    set_col1, set_col2 = st.columns(2)
-    with set_col1:
-        pos = st.radio("포지션", ["타자", "투수"], horizontal=True)
-    with set_col2:
-        era = st.selectbox("활약 시대", ["현대 야구 (2006-현재)", "스테로이드 시대 (1993-2005)", "통합기 (1947-1992)", "데드볼/골든에이지 (~1946)"])
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        black = st.number_input("Black Ink", value=float(avg['Black']))
+        gray = st.number_input("Gray Ink", value=float(avg['Gray']))
+    with c2:
+        hof_m = st.number_input("HOF Monitor", value=float(avg['HOFm']))
+        hof_s = st.number_input("HOF Standards", value=float(avg['HOFs']))
+    with c3:
+        c_war = st.number_input("Career WAR", value=float(avg['WAR']))
+        p_war = st.number_input("7yr-Peak WAR", value=float(avg['Peak']))
+        jaws = st.number_input("JAWS", value=float(avg['JAWS']))
 
-    avg = STATS_AVG[pos]
-    st.divider()
-
-    # 지표 입력 섹션 (3열 구성으로 깔끔하게)
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        black = st.number_input(f"Black Ink (평균 {avg['Black']})", value=float(avg['Black']))
-        gray = st.number_input(f"Gray Ink (평균 {avg['Gray']})", value=float(avg['Gray']))
-    with col2:
-        hof_m = st.number_input(f"HOF Monitor (평균 100)", value=float(avg['HOFm']))
-        hof_s = st.number_input(f"HOF Standards (평균 50)", value=float(avg['HOFs']))
-    with col3:
-        c_war = st.number_input(f"Career WAR (평균 {avg['WAR']})", value=float(avg['WAR']))
-        p_war = st.number_input(f"7yr-Peak WAR (평균 {avg['Peak']})", value=float(avg['Peak']))
-        jaws = st.number_input(f"JAWS (평균 {avg['JAWS']})", value=float(avg['JAWS']))
-
-    if st.button("AI 정밀 분석 실행"):
-        # 시대 보정 계수 적용
-        era_adj = 1.05 if "현대" in era else (0.92 if "스테로이드" in era else 1.0)
+    if st.button("AI 분석 실행"):
+        input_data = np.array([[black, gray, hof_m, hof_s, c_war, p_war, jaws]])
         
-        # 입력 데이터 준비
-        input_data = np.array([[black, gray, hof_m, hof_s, c_war * era_adj, p_war * era_adj, jaws * era_adj]])
+        # 확률 계산
         prob = model.predict_proba(input_data)[0, 1] * 100
         
-        # 득표율 시뮬레이션 (7대 지표 종합 가중치)
-        score = (c_war * 0.4) + (jaws * 0.4) + (hof_m * 0.1) + (black * 0.1)
-        est_vote = min(99.9, score + 15)
+        # 득표율 시뮬레이션 (3대 축 밸런스 점수)
+        # 세이버(40%) + 명성(40%) + 누적(20%) 비율로 조정
+        sabermetrics = (jaws / avg['JAWS']) * 40
+        fame = (hof_m / avg['HOFm']) * 40
+        longevity = (hof_s / avg['HOFs']) * 20
+        
+        est_vote = min(99.9, (sabermetrics + fame + longevity) / 100 * 75 + 10)
 
         st.divider()
         res_col1, res_col2 = st.columns(2)
@@ -78,28 +73,9 @@ with tab1:
         res_col2.metric("예상 최고 득표율", f"{est_vote:.1f}%")
         st.progress(prob / 100)
 
-        # 결과 판정
-        if prob >= 85:
-            st.balloons()
-            st.success(f"🏆 **[INNER CIRCLE]** 역대급 전설입니다! 입성이 확실시됩니다.")
-        elif prob >= 50:
-            st.info(f"⚾ **[SOLID CANDIDATE]** 헌액 기준을 충족합니다. 무난한 입성이 예상됩니다.")
-        elif prob >= 30:
-            st.warning(f"⚠️ **[BORDERLINE]** 입성 경계선에 있습니다. 논쟁이 예상됩니다.")
+        if est_vote >= 75:
+            st.success("🏆 **입성 안정권:** 지표의 밸런스가 매우 좋습니다.")
+        elif est_vote >= 50:
+            st.warning("⚾ **경합 후보:** 한 분야는 강하지만 다른 분야 보완이 필요합니다.")
         else:
-            st.error(f"❌ **[BELOW STANDARDS]** 현재 지표로는 입성 문턱을 넘기 어렵습니다.")
-
-with tab2:
-    st.header("📍 데이터 찾는 방법 (Baseball-Reference)")
-    st.markdown(f"""
-    1. 구글에 **'[선수 이름] Baseball Reference'** 검색
-    2. 상단 프로필에서 **Career WAR** 확인
-    3. 하단 **'Hall of Fame Statistics'** 섹션에서 다음 지표를 모두 확인 가능합니다:
-        * **Black Ink / Gray Ink**
-        * **HOF Monitor / HOF Standards**
-        * **7yr-Peak WAR / JAWS**
-    """)
-    st.info(f"💡 현재 **{pos}** 모드입니다. 포지션에 따라 평균 데이터가 자동으로 변경됩니다.")
-
-st.divider()
-st.caption("AI 모델 버전: v3.0 (7대 지표 통합 + 시대보정 + 투/타 분리)")
+            st.error("❌ **입성 어려움:** 역대 헌액자 평균치에 미달합니다.")
