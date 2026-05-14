@@ -83,4 +83,23 @@ with tab1:
             st.balloons()
             st.success(f"🏆 **[INNER CIRCLE]** 역대급 전설입니다! 입성이 확실시됩니다.")
         elif prob >= 50:
-            st.info(
+            st.info(f"⚾ **[SOLID CANDIDATE]** 헌액 기준을 충족합니다. 무난한 입성이 예상됩니다.")
+        elif prob >= 30:
+            st.warning(f"⚠️ **[BORDERLINE]** 입성 경계선에 있습니다. 논쟁이 예상됩니다.")
+        else:
+            st.error(f"❌ **[BELOW STANDARDS]** 현재 지표로는 입성 문턱을 넘기 어렵습니다.")
+
+with tab2:
+    st.header("📍 데이터 찾는 방법 (Baseball-Reference)")
+    st.markdown(f"""
+    1. 구글에 **'[선수 이름] Baseball Reference'** 검색
+    2. 상단 프로필에서 **Career WAR** 확인
+    3. 하단 **'Hall of Fame Statistics'** 섹션에서 다음 지표를 모두 확인 가능합니다:
+        * **Black Ink / Gray Ink**
+        * **HOF Monitor / HOF Standards**
+        * **7yr-Peak WAR / JAWS**
+    """)
+    st.info(f"💡 현재 **{pos}** 모드입니다. 포지션에 따라 평균 데이터가 자동으로 변경됩니다.")
+
+st.divider()
+st.caption("AI 모델 버전: v3.0 (7대 지표 통합 + 시대보정 + 투/타 분리)")
