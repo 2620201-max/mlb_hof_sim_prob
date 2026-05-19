@@ -3,24 +3,24 @@ import pandas as pd
 import numpy as np
 from sklearn.linear_model import LogisticRegression
 
-# --- 1. AI 통합 모델 학습 (정직한 데이터, 정교한 변별력) ---
+# --- 1. AI 통합 모델 학습 (최상위권 인플레이션 차단 튜닝) ---
 @st.cache_resource
 def train_hof_ultimate_model():
     # 데이터 구조: [Black Ink, Gray Ink, HOFm, HOFs, Career WAR, 7yr-Peak, JAWS]
     X = np.array([
-        [70, 320, 380, 80, 115.0, 62.0, 88.5],  # 1. 신계 레전드 (루스, 에런, 푸홀스) -> 99% 만점 기준
-        [45, 220, 240, 62, 85.0, 52.0, 68.5],   # 2. 현실판 탑클래스 (트라웃, 벨트레) -> 91~95% (변별력 유지)
-        [30, 160, 150, 55, 75.0, 45.0, 60.0],  # 3. 정석적인 헌액자 -> 80-85%
-        [40, 185, 165, 50, 46.2, 41.2, 43.7],  # 4. 디지 딘형 (임팩트 극강, 누적 부족) -> 65-75%
-        [15, 120, 150, 48, 50.0, 38.0, 44.0],  # 5. 세페다형 (임팩트형 경계선) -> 55-65%
-        [10, 140, 75, 55, 65.0, 35.0, 50.0],   # 6. 누적형 헌액자 (꾸준함) -> 60-70%
-        [12, 90, 90, 35, 62.0, 38.0, 50.0],    # 7. 세이버형 경계선 (로프턴 등) -> 40-50%
-        [5, 60, 50, 30, 45.0, 30.0, 37.5]      # 8. 명전 미달자 -> 15% 이하
+        [120, 450, 500, 95, 140.0, 70.0, 105.0], # 1. 지구 파괴급 신 (루스, 사이영, 메이스) -> **여기를 넣어야 겨우 98~99%가 나옵니다**
+        [60, 280, 320, 75, 100.0, 58.0, 79.0],  # 2. 올타임 슈퍼 레전드 (푸홀스, 로드리게스 등) -> 90%대 초중반 타겟
+        [40, 200, 200, 60, 80.0, 48.0, 64.0],   # 3. 확실한 First Ballot (트라웃, 벨트레 등) -> **이제 여기가 80%대로 통제됩니다**
+        [25, 140, 130, 50, 65.0, 40.0, 52.5],   # 4. 정석적인 헌액자 -> 65~75%
+        [40, 185, 165, 50, 46.2, 41.2, 43.7],   # 5. 디지 딘형 (임팩트 극강, 누적 부족) -> 55~65%
+        [12, 120, 110, 45, 55.0, 36.0, 45.5],   # 6. 세페다형 / 세이버 경계선 -> 40~50%
+        [5, 60, 50, 30, 40.0, 28.0, 34.0]       # 7. 명전 미달자 -> 10% 이하
     ])
-    y = np.array([1, 1, 1, 1, 1, 1, 0, 0])
+    y = np.array([1, 1, 1, 1, 1, 0, 0])
     
-    # C=0.08로 격차를 확실히 인지하게 고정 (시대에 따라 흔들리지 않는 절대 기준)
-    model = LogisticRegression(class_weight='balanced', C=0.08, max_iter=2000)
+    # C=0.005로 규제를 극대화하여 그래프 기울기를 엄청나게 완만하게 만듦 (Smooth 확률 분산)
+    # 웬만한 스탯 상승으로는 확률이 쉽게 뻥튀기되지 않는 구조
+    model = LogisticRegression(class_weight='balanced', C=0.005, max_iter=3000)
     model.fit(X, y)
     return model
 
@@ -34,7 +34,7 @@ STATS_AVG = {
 
 # --- 3. UI 구성 ---
 st.set_page_config(page_title="MLB HOF AI 통합 진단기", layout="centered")
-st.title("🏛️ MLB HOF AI 통합 진단기 (v4.2)")
+st.title("🏛️ MLB HOF AI 통합 진단기 (v4.3 - 철벽 밸런스)")
 
 tab1, tab2 = st.tabs(["🔍 HOF 정밀 진단", "📖 가이드 (데이터 검색 및 시대 설명)"])
 
@@ -51,7 +51,7 @@ with tab1:
     avg = STATS_AVG[pos]
     st.divider()
     
-    # 지표 입력 (유저가 입력한 값 그대로 모델에 들어감)
+    # 지표 입력
     c1, c2, c3 = st.columns(3)
     with c1:
         black = st.number_input(f"Black Ink (평균 {avg['Black']})", value=float(avg['Black']))
@@ -65,57 +65,50 @@ with tab1:
         jaws = st.number_input(f"JAWS (평균 {avg['JAWS']})", value=float(avg['JAWS']))
 
     if st.button("AI 통합 분석 실행"):
-        # 입력 데이터 그대로 원본 어레이 생성 (데이터 왜곡 없음)
         input_data = np.array([[black, gray, hof_m, hof_s, c_war, p_war, jaws]])
         
-        # 1. 고정된 회귀 모델을 통한 수학적 확률 계산
+        # 1. 헌액 확률 계산 (기울기가 완만해져 최상위권 뻥튀기 전면 차단)
         raw_prob = model.predict_proba(input_data)[0, 1] * 100
         
-        # 물리적 소프트 캡 (누적 WAR가 평균의 75% 미만이면 최대 78.5% 제한)
+        # 소프트 캡 (누적 WAR 결핍 제어)
         if c_war < avg['WAR'] * 0.75:
-            final_prob = min(raw_prob, 78.5)
+            final_prob = min(raw_prob, 75.0)
         else:
             final_prob = raw_prob
             
-        # 2. [핵심] 시대별 투표 기자단의 '성향(가중치)' 스위칭 로직
-        # 인풋 데이터를 건드리는 게 아니라, 최종 점수를 내는 비율을 바꿈!
+        # 2. 시대별 투표 기자단 성향 반영 (득표율 수식)
         if era == "현대 세이버 야구 (2006-현재)":
-            # 현대 기자단: 세이버메트릭스(JAWS)를 무려 60% 반영, 클래식 명성(HOFm)은 축소
             sabermetrics = (jaws / avg['JAWS']) * 60
             fame = (hof_m / avg['HOFm']) * 25
             longevity = (hof_s / avg['HOFs']) * 15
         elif era == "스테로이드 시대 (1993-2005)":
-            # 스테로이드 시절: 약물 홈런 버블로 인해 HOFm 기준을 엄격하게 잡음 (세이버와 누적 위주)
             sabermetrics = (jaws / avg['JAWS']) * 40
-            fame = (hof_m / avg['HOFm']) * 20  # 명성 반영률 유일하게 축소
+            fame = (hof_m / avg['HOFm']) * 20
             longevity = (hof_s / avg['HOFs']) * 40
         elif era == "데드볼/골든에이지 (~1946)":
-            # 옛날 야구: 무조건 임팩트, 타이틀 갯수(HOFm), 블랭인크가 장땡
             sabermetrics = (jaws / avg['JAWS']) * 20
-            fame = (hof_m / avg['HOFm']) * 55  # 전통적 클래식 명성 55% 폭등
+            fame = (hof_m / avg['HOFm']) * 55
             longevity = (hof_s / avg['HOFs']) * 25
         else:
-            # 통합기 표준 세팅 (40 / 40 / 20)
             sabermetrics = (jaws / avg['JAWS']) * 40
             fame = (hof_m / avg['HOFm']) * 40
             longevity = (hof_s / avg['HOFs']) * 20
         
-        # 누적 하한선에 따른 감점 시스템 지표 고정
         vote_score = sabermetrics + fame + longevity
         if c_war < avg['WAR'] * 0.7:
-            vote_score *= 0.88
+            vote_score *= 0.85 # 감점 폭 미세 상향
 
-        # 최종 득표율 산출
-        est_vote = min(99.9, (vote_score / 100) * 70 + 15)
+        # 최고 득표율 기준선도 최상위권 변별력을 위해 70% 비율로 압축
+        est_vote = min(99.9, (vote_score / 100) * 65 + 15)
 
         # 3. 결과 출력
         st.divider()
         res_col1, res_col2 = st.columns(2)
-        res_col1.metric("AI 헌액 확률 (수학적 고정)", f"{final_prob:.1f}%")
+        res_col1.metric("최종 헌액 확률 (수학적 고정)", f"{final_prob:.1f}%")
         res_col2.metric("예상 최고 득표율 (기자단 성향 반영)", f"{est_vote:.1f}%")
         st.progress(final_prob / 100)
 
-        # 득표율 기준 판정 메세지팩 완벽 유지
+        # 득표율 기준 판정 메세지팩
         if est_vote >= 95.0:
             st.balloons()
             st.success(f"👑 **[FIRST BALLOT LOCK]** 만장일치를 논할 수준의 역대급 전설입니다. 첫해 입성이 100% 확실합니다.")
