@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from sklearn.linear_model import LogisticRegression
 
-# --- 1. AI 통합 모델 학습 ---
+# --- 1. AI 통합 모델 학습 (v4.4의 단단한 변별력 알고리즘 유지) ---
 @st.cache_resource
 def train_hof_ultimate_model():
     X = np.array([
@@ -23,100 +23,101 @@ def train_hof_ultimate_model():
 
 model = train_hof_ultimate_model()
 
-# --- 2. 포지션별/유형별 명전 헌액자 평균 스탯 세분화 ---
-STATS_PRESETS = {
-    "타자": {
-        "⚾ 일반 타자 평균 스탯": {"Black": 27.0, "Gray": 144.0, "HOFm": 100.0, "HOFs": 50.0, "WAR": 67.0, "Peak": 43.0, "JAWS": 55.0},
-        "👑 호타준족 / 외야수 레전드": {"Black": 35.0, "Gray": 160.0, "HOFm": 130.0, "HOFs": 55.0, "WAR": 75.0, "Peak": 46.0, "JAWS": 60.5},
-        "🛡️ 키스톤 / 포수 포지션 프리미엄": {"Black": 15.0, "Gray": 110.0, "HOFm": 85.0, "HOFs": 43.0, "WAR": 58.0, "Peak": 38.0, "JAWS": 48.0}
-    },
-    "투수": {
-        "⚾ 일반 투수 평균 스탯": {"Black": 40.0, "Gray": 185.0, "HOFm": 100.0, "HOFs": 50.0, "WAR": 73.0, "Peak": 50.0, "JAWS": 62.0},
-        "🔥 올타임 에이스 (선발 클래식)": {"Black": 50.0, "Gray": 210.0, "HOFm": 150.0, "HOFs": 62.0, "WAR": 82.0, "Peak": 54.0, "JAWS": 68.0},
-        "⛓️ 현대형 이닝이터 / 분업화 수혜": {"Black": 20.0, "Gray": 130.0, "HOFm": 90.0, "HOFs": 46.0, "WAR": 61.0, "Peak": 41.0, "JAWS": 51.0}
-    }
+# --- 2. [진짜 야구 포지션] 명예의 전당 입성자 실제 포지션별 평균 통계 데이터셋 ---
+POSITION_STATS = {
+    "포수 (C)": {"Black": 13, "Gray": 92, "HOFm": 90, "HOFs": 44, "WAR": 53.8, "Peak": 34.4, "JAWS": 44.1, "Type": "타자"},
+    "1루수 (1B)": {"Black": 32, "Gray": 154, "HOFm": 115, "HOFs": 54, "WAR": 65.5, "Peak": 41.8, "JAWS": 53.7, "Type": "타자"},
+    "2루수 (2B)": {"Black": 20, "Gray": 128, "HOFm": 105, "HOFs": 49, "WAR": 69.4, "Peak": 44.3, "JAWS": 56.9, "Type": "타자"},
+    "3루수 (3B)": {"Black": 21, "Gray": 122, "HOFm": 98, "HOFs": 51, "WAR": 68.3, "Peak": 42.9, "JAWS": 55.6, "Type": "타자"},
+    "유격수 (SS)": {"Black": 13, "Gray": 109, "HOFm": 87, "HOFs": 43, "WAR": 66.8, "Peak": 43.0, "JAWS": 54.9, "Type": "타자"},
+    "좌익수 (LF)": {"Black": 32, "Gray": 156, "HOFm": 110, "HOFs": 53, "WAR": 65.2, "Peak": 41.5, "JAWS": 53.4, "Type": "타자"},
+    "중견수 (CF)": {"Black": 31, "Gray": 147, "HOFm": 120, "HOFs": 55, "WAR": 71.3, "Peak": 44.6, "JAWS": 57.9, "Type": "타자"},
+    "우익수 (RF)": {"Black": 33, "Gray": 161, "HOFm": 125, "HOFs": 56, "WAR": 71.5, "Peak": 41.9, "JAWS": 56.7, "Type": "타자"},
+    "선발투수 (SP)": {"Black": 44, "Gray": 196, "HOFm": 115, "HOFs": 52, "WAR": 73.0, "Peak": 49.9, "JAWS": 61.4, "Type": "투수"},
+    "구원투수 (RP)": {"Black": 8, "Gray": 55, "HOFm": 72, "HOFs": 32, "WAR": 39.5, "Peak": 27.0, "JAWS": 33.3, "Type": "투수"}
 }
 
 # --- 3. UI 구성 ---
-st.set_page_config(page_title="MLB HOF AI 통합 진단기 v4.5", layout="centered")
-st.title("🏛️ MLB HOF AI 통합 진단기 (v4.5 - 포지션별 평균 분리형)")
+st.set_page_config(page_title="MLB 포지션별 HOF AI 진단기", layout="centered")
+st.title("🏛️ MLB HOF AI 통합 진단기 (v4.6 - 리얼 포지션별 연동판)")
 
-tab1, tab2 = st.tabs(["🔍 HOF 정밀 진단", "📖 가이드 (데이터 검색 및 시대 설명)"])
+tab1, tab2 = st.tabs(["🔍 수비 포지션별 HOF 정밀 진단", "📖 포지션별 데이터 가이드"])
 
 with tab1:
-    col_pos, col_era = st.columns(2)
-    with col_pos:
-        pos = st.radio("포지션 선택", ["타자", "투수"], horizontal=True)
-    with col_era:
-        era = st.selectbox(
-            "선수의 주 활약 연대(시대) 선택",
-            ["데드볼/골든에이지 (~1946)", "통합 및 확장기 (1947-1992)", "스테로이드 시대 (1993-2005)", "현대 세이버 야구 (2006-현재)"]
-        )
+    # 사용자님이 원하시던 '진짜' 수비 포지션 셀렉트 박스
+    selected_pos = st.selectbox(
+        "🏃 선수의 주 수비 포지션을 선택하세요", 
+        list(POSITION_STATS.keys())
+    )
     
-    # [핵심 업데이트] 포지션에 맞춰서 평균 프리셋 리스트를 동적으로 바인딩
-    preset_options = list(STATS_PRESETS[pos].keys())
-    selected_preset = st.selectbox("📊 불러올 명전 헌액자 평균 스탯 유형 선택", preset_options)
+    era = st.selectbox(
+        "선수의 주 활약 연대(시대) 선택",
+        ["데드볼/골든에이지 (~1946)", "통합 및 확장기 (1947-1992)", "스테로이드 시대 (1993-2005)", "현대 세이버 야구 (2006-현재)"]
+    )
     
-    # 선택된 프리셋 값을 입력창의 기본값(default)으로 매칭
-    avg = STATS_PRESETS[pos][selected_preset]
+    # 선택된 포지션의 공식 평균 수치를 변수에 즉시 바인딩
+    avg = POSITION_STATS[selected_pos]
+    pos_type = avg["Type"]  # 타자 또는 투수인지 판별
     
-    st.caption("💡 위 프리셋을 변경하면 아래 입력창들의 수치가 해당 포지션 평균값으로 자동 리셋됩니다.")
+    st.caption(f"💡 **{selected_pos}** 가 선택되었습니다. 아래 스탯 입력창의 초기값이 해당 포지션의 실제 명전 평균값으로 세팅됩니다.")
     st.divider()
     
-    # 값 입력 칸 (프리셋 선택에 따라 기본값이 유연하게 변동)
+    # 값 입력 칸 (포지션 선택에 따라 완벽하게 실시간 변동)
     c1, c2, c3 = st.columns(3)
     with c1:
-        black = st.number_input("Black Ink", value=avg["Black"], step=1.0)
-        gray = st.number_input("Gray Ink", value=avg["Gray"], step=1.0)
+        black = st.number_input("Black Ink", value=float(avg["Black"]), step=1.0)
+        gray = st.number_input("Gray Ink", value=float(avg["Gray"]), step=1.0)
     with c2:
-        hof_m = st.number_input("HOF Monitor", value=avg["HOFm"], step=1.0)
-        hof_s = st.number_input("HOF Standards", value=avg["HOFs"], step=1.0)
+        hof_m = st.number_input("HOF Monitor", value=float(avg["HOFm"]), step=1.0)
+        hof_s = st.number_input("HOF Standards", value=float(avg["HOFs"]), step=1.0)
     with c3:
-        c_war = st.number_input("Career WAR", value=avg["WAR"], step=0.1)
-        p_war = st.number_input("7yr-Peak WAR", value=avg["Peak"], step=0.1)
-        jaws = st.number_input("JAWS", value=avg["JAWS"], step=0.1)
+        c_war = st.number_input("Career WAR", value=float(avg["WAR"]), step=0.1)
+        p_war = st.number_input("7yr-Peak WAR", value=float(avg["Peak"]), step=0.1)
+        jaws = st.number_input("JAWS", value=float(avg["JAWS"]), step=0.1)
 
-    if st.button("AI 통합 분석 실행"):
+    if st.button("포지션 맞춤 AI 분석 실행"):
         input_data = np.array([[black, gray, hof_m, hof_s, c_war, p_war, jaws]])
         
         # 1. AI 헌액 확률 계산
         raw_prob = model.predict_proba(input_data)[0, 1] * 100
         
-        # 기준값은 선택된 프리셋이 아닌, 전통적인 포지션 기본 컷(딕셔너리의 첫 번째 요소값 기준)으로 페널티 계산
-        base_avg = STATS_PRESETS[pos][list(STATS_PRESETS[pos].keys())[0]]
-        
-        # [누적 보정 프리미엄]
-        is_accumulation_monster = (pos == "투수" and hof_s >= 48) or (pos == "타자" and hof_s >= 55)
-        
-        if c_war < base_avg['WAR'] * 0.75 and not is_accumulation_monster:
+        # [누적 보정 프리미엄 규칙] 포지션 성격에 맞춤화
+        if pos_type == "투수":
+            is_accumulation_monster = (hof_s >= 48) or (selected_pos == "구원투수 (RP)" and hof_m >= 120)
+            war_threshold = avg['WAR'] * 0.75 if selected_pos == "선발투수 (SP)" else avg['WAR'] * 0.65
+        else:
+            is_accumulation_monster = (hof_s >= 55) or (selected_pos in ["포수 (C)", "유격수 (SS)"] and hof_s >= 42)
+            war_threshold = avg['WAR'] * 0.75
+            
+        if c_war < war_threshold and not is_accumulation_monster:
             final_prob = min(raw_prob, 75.0)
         else:
             final_prob = raw_prob
             
-        # 2. 시대별 투표 기자단 성향 반영 (득표율 수식)
+        # 2. 시대별 투표 기자단 성향 반영 (득표율 수식 - 포지션별 분리 적용)
         if era == "현대 세이버 야구 (2006-현재)":
-            sabermetrics = (jaws / base_avg['JAWS']) * 60
-            fame = (hof_m / base_avg['HOFm']) * 25
-            longevity = (hof_s / base_avg['HOFs']) * 15
+            sabermetrics = (jaws / avg['JAWS']) * 60
+            fame = (hof_m / avg['HOFm']) * 25
+            longevity = (hof_s / avg['HOFs']) * 15
         elif era == "스테로이드 시대 (1993-2005)":
-            sabermetrics = (jaws / base_avg['JAWS']) * 40
-            fame = (hof_m / base_avg['HOFm']) * 20
-            longevity = (hof_s / base_avg['HOFs']) * 40
+            sabermetrics = (jaws / avg['JAWS']) * 40
+            fame = (hof_m / avg['HOFm']) * 20
+            longevity = (hof_s / avg['HOFs']) * 40
         elif era == "데드볼/골든에이지 (~1946)":
-            sabermetrics = (jaws / base_avg['JAWS']) * 20
-            fame = (hof_m / base_avg['HOFm']) * 55
-            longevity = (hof_s / base_avg['HOFs']) * 25
+            sabermetrics = (jaws / avg['JAWS']) * 20
+            fame = (hof_m / avg['HOFm']) * 55
+            longevity = (hof_s / avg['HOFs']) * 25
         else:
-            sabermetrics = (jaws / base_avg['JAWS']) * 40
-            fame = (hof_m / base_avg['HOFm']) * 40
-            longevity = (hof_s / base_avg['HOFs']) * 20
+            sabermetrics = (jaws / avg['JAWS']) * 40
+            fame = (hof_m / avg['HOFm']) * 40
+            longevity = (hof_s / avg['HOFs']) * 20
         
         vote_score = sabermetrics + fame + longevity
         
-        # 누적 페널티 조건 우회
+        # 누적 페널티 조건 및 보너스 가중치 우회
         if is_accumulation_monster:
-            vote_score *= 1.12  # 사바시아 보너스 적용
-        elif c_war < base_avg['WAR'] * 0.7:
+            vote_score *= 1.12  # 누적 백골전사 프리미엄 12% 가산
+        elif c_war < avg['WAR'] * 0.7:
             vote_score *= 0.85
 
         est_vote = min(99.9, (vote_score / 100) * 65 + 15)
@@ -124,38 +125,31 @@ with tab1:
         # 3. 결과 출력
         st.divider()
         res_col1, res_col2 = st.columns(2)
-        res_col1.metric("최종 헌액 확률 (수학적 고정)", f"{final_prob:.1f}%")
-        res_col2.metric("예상 최고 득표율 (기자단 성향 반영)", f"{est_vote:.1f}%")
+        res_col1.metric(f"최종 헌액 확률 ({selected_pos} 기준)", f"{final_prob:.1f}%")
+        res_col2.metric("예상 최고 득표율 (기자단 경향 반영)", f"{est_vote:.1f}%")
         st.progress(final_prob / 100)
 
         if est_vote >= 95.0:
             st.balloons()
-            st.success(f"👑 **[FIRST BALLOT LOCK]** 만장일치를 논할 수준의 역대급 전설입니다. 첫해 입성이 100% 확실합니다.")
+            st.success(f"👑 **[FIRST BALLOT LOCK]** 해당 포지션 역사상 만장일치 수준을 논할 전설입니다. 첫해 입성 확실.")
         elif est_vote >= 85.0:
             st.balloons()
-            st.success(f"🏆 **[HOF ELECT]** 투표 첫해 혹은 초반 기수에 압도적인 표수로 여유롭게 입성할 선수입니다.")
+            st.success(f"🏆 **[HOF ELECT]** 해당 포지션의 상징적인 선수로 투표 초반 기수에 압도적 표수로 입성합니다.")
         elif est_vote >= 75.0:
-            st.info(f"⚾ **[SAFE ZONE]** 명예의 전당 기준선(75%)을 넘겼습니다. 안정적으로 쿠퍼스타운행 티켓을 따냅니다.")
+            st.info(f"⚾ **[SAFE ZONE]** 명예의 전당 헌액 커트라인(75%)을 넘겼습니다. 쿠퍼스타운 입성이 확실시됩니다.")
         elif est_vote >= 60.0:
-            st.warning(f"⚠️ **[BORDERLINE - HIGH]** 입성 컷에는 살짝 미달하지만, 투표 기수가 지남에 따라 재평가되어 추후 입성할 가능성이 매우 높습니다.")
+            st.warning(f"⚠️ **[BORDERLINE - HIGH]** 수비 포지션 평균엔 살짝 미치지 못하지만, 추후 베테랑 위원회 등으로 구제될 확률이 높습니다.")
         elif est_vote >= 40.0:
-            st.warning(f"🤔 **[BORDERLINE - LOW]** 매년 투표 후보에는 남겠지만(5% 유지), 기자들 사이에서 치열한 논쟁이 벌어지며 장기 잔류할 상입니다.")
+            st.warning(f"🤔 **[BORDERLINE - LOW]** 매년 투표 후보직(5%)은 유지하되, 기자단 투표 창구에서 치열한 키보드 배틀이 벌어질 보더라인 라인입니다.")
         elif est_vote >= 5.0:
-            st.error(f"❌ **[ONE AND DONE]** 메이저리그를 풍미한 훌륭한 선수(Very Good)지만, 명전 투표에서는 첫해 5% 미만으로 광속 탈락할 위험이 큽니다.")
+            st.error(f"❌ **[ONE AND DONE]** 한 시대를 풍미한 포지션 스타(Very Good)지만, 명전 기준에는 미달하여 첫해 광속 탈락할 위험이 큽니다.")
         else:
-            st.error(f"❌ **[OUT OF RANGE]** 명예의 전당 투표 후보(Ballot) 자격을 얻는 것조차 쉽지 않은 스탯입니다.")
+            st.error(f"❌ **[OUT OF RANGE]** 명예의 전당 투표 후보 명단(Ballot)에 들어가는 것 자체가 불가능한 스탯입니다.")
 
 with tab2:
-    st.header("🔍 1. 데이터 검색 3단계 가이드")
+    st.header("📊 실제 메이저리그 명예의 전당 포지션별 특징 설명")
     st.markdown("""
-    모든 스탯은 미국의 권위 있는 야구 통계 사이트인 **Baseball-Reference**에서 1분 만에 찾을 수 있습니다.
-    
-    * **1단계 (구글링):** 구글에 `[선수 영문 이름] + baseball reference` 검색 후 접속
-    * **2단계 (스크롤):** 메인 기록 테이블들을 지나 아래쪽 **Leaderboards & Awards** 섹션으로 이동합니다.
-    * **3단계 (매칭):** **[Hall of Fame Statistics]** 테이블에 있는 7가지 항목을 그대로 입력창에 채워 넣습니다.
-    """)
-    st.divider()
-    st.header("📊 2. 연대별 기자단 투표 성향 및 예외 조항")
-    st.markdown("""
-    * **누적 스탯 프리미엄 (사바시아 조항):** 현대 야구에서 투수의 분업화로 인해 WAR 손해를 보더라도, **HOF Standards(누적 점수)가 압도적인 선수(투수 48점 이상)**는 3,000탈삼진/250승 등의 금자탑을 쌓은 것으로 간주하여 **최종 득표율에 1.12배 보너스 가중치**를 부여하고 소프트캡 감점을 면제합니다.
+    * **포수 (C) 및 유격수 (SS):** 체력 소모가 극심하고 수비 기여도가 높기 때문에, 통산 Career WAR 가 기준선(**53.8~66.8**)보다 약간 낮아도 HOF Monitor나 Standards 수치가 높으면 강력하게 우대받습니다.
+    * **1루수 (1B) 및 우익수 (RF):** 공격 위주의 포지션이므로 평균 요구 WAR(**65.5~71.5**)와 HOF Monitor 스탯 요구치(**115~125**)가 타 포지션에 비해 현격히 높습니다. 슬러거 기준이 까다롭습니다.
+    * **구원투수 (RP):** 누적 이닝의 한계로 Career WAR 평균(**39.5**)은 매우 낮지만, 세이브왕 타이틀이나 임팩트를 측정하는 HOF Monitor 수치가 합격을 가르는 핵심 열쇠가 됩니다.
     """)
