@@ -31,6 +31,11 @@ HOF_GLOBAL_AVG = {
     "HOFs": 50     
 }
 
+# AI 모델의 기저 기준 스케일 (기존 v4.4 타자/투수 표준 베이스라인)
+MODEL_BASE_WAR = {"타자": 67.0, "투수": 73.0}
+MODEL_BASE_PEAK = {"타자": 43.0, "투수": 50.0}
+MODEL_BASE_JAWS = {"타자": 55.0, "투수": 62.0}
+
 # --- 3. 명예의 전당 입성자 실제 포지션별 세이버메트릭스 데이터셋 ---
 POSITION_STATS = {
     "포수 (C)": {"Name": "포수", "WAR": 53.8, "Peak": 34.4, "JAWS": 44.1, "Type": "타자"},
@@ -46,8 +51,8 @@ POSITION_STATS = {
 }
 
 # --- 4. UI 구성 ---
-st.set_page_config(page_title="MLB HOF AI 통합 진단기 v4.9", layout="centered")
-st.title("🏛️ MLB HOF 확률 계산기 (v4.9 - 통합 완전판)")
+st.set_page_config(page_title="MLB HOF AI 통합 진단기 v4.92", layout="centered")
+st.title("🏛️ MLB HOF AI 통합 진단기 (v4.92 - 상위권 득표율 교정판)")
 
 tab1, tab2 = st.tabs(["🔍 HOF 정밀 진단", "📖 가이드 (데이터 검색 및 시대 설명)"])
 
@@ -62,14 +67,12 @@ with tab1:
         ["데드볼/골든에이지 (~1946)", "통합 및 확장기 (1947-1992)", "스테로이드 시대 (1993-2005)", "현대 세이버 야구 (2006-현재)"]
     )
     
-    # 데이터 매칭
     avg = POSITION_STATS[selected_pos]
     p_name = avg["Name"]   
     pos_type = avg["Type"] 
     
     st.divider()
     
-    # 값 입력 칸 구성 (HOF 통계는 전체 평균 고정 / WAR 계열은 포지션 평균 반영)
     c1, c2, c3 = st.columns(3)
     with c1:
         black = st.number_input(f"Black Ink (전체 평균: {HOF_GLOBAL_AVG['Black']})", value=float(HOF_GLOBAL_AVG["Black"]), step=1.0)
@@ -83,12 +86,14 @@ with tab1:
         jaws = st.number_input(f"JAWS ({p_name} 평균: {avg['JAWS']})", value=float(avg["JAWS"]), step=0.1)
 
     if st.button("포지션 맞춤 AI 분석 실행"):
-        input_data = np.array([[black, gray, hof_m, hof_s, c_war, p_war, jaws]])
+        scaled_c_war = (c_war / avg['WAR']) * MODEL_BASE_WAR[pos_type]
+        scaled_p_war = (p_war / avg['Peak']) * MODEL_BASE_PEAK[pos_type]
+        scaled_jaws = (jaws / avg['JAWS']) * MODEL_BASE_JAWS[pos_type]
         
-        # 1. AI 헌액 확률 계산
+        input_data = np.array([[black, gray, hof_m, hof_s, scaled_c_war, scaled_p_war, scaled_jaws]])
+        
         raw_prob = model.predict_proba(input_data)[0, 1] * 100
         
-        # [누적 보정 프리미엄 규칙] 포지션별 유연화 적용
         if pos_type == "투수":
             is_accumulation_monster = (hof_s >= 48) or (selected_pos == "구원투수 (RP)" and hof_m >= 120)
             war_threshold = avg['WAR'] * 0.75 if selected_pos == "선발투수 (SP)" else avg['WAR'] * 0.65
@@ -101,7 +106,6 @@ with tab1:
         else:
             final_prob = raw_prob
             
-        # 2. 시대별 투표 기자단 성향 반영
         if era == "현대 세이버 야구 (2006-현재)":
             sabermetrics = (jaws / avg['JAWS']) * 60
             fame = (hof_m / HOF_GLOBAL_AVG['HOFm']) * 25
@@ -121,15 +125,23 @@ with tab1:
         
         vote_score = sabermetrics + fame + longevity
         
-        # 누적 페널티 조건 및 보너스 적용 우회
         if is_accumulation_monster:
             vote_score *= 1.12
         elif c_war < avg['WAR'] * 0.7:
             vote_score *= 0.85
 
-        est_vote = min(99.9, (vote_score / 100) * 65 + 15)
+        # ------------------ [핵심 교정 수식 변경] ------------------
+        # 선형 수식을 버리고, 상위권으로 갈수록 압축 저항이 발생하는 시그모이드 감쇠 곡선 적용
+        if vote_score >= 100:
+            # 평균 이상 구간: 75%에서 출발하여 vote_score가 대폭 높아야 95%~99%에 도달하도록 감쇠 조정
+            est_vote = 75.0 + (24.9 / (1.0 + np.exp(-0.05 * (vote_score - 100))))
+        else:
+            # 평균 미만 구간: 하락 곡선을 자연스럽게 연결
+            est_vote = 5.0 + (70.0 / (1.0 + np.exp(-0.05 * (vote_score - 60))))
+            
+        est_vote = min(99.9, max(0.0, est_vote))
+        # --------------------------------------------------------
 
-        # 3. 결과 출력
         st.divider()
         res_col1, res_col2 = st.columns(2)
         res_col1.metric(f"최종 헌액 확률 ({selected_pos} 기준)", f"{final_prob:.1f}%")
@@ -166,7 +178,7 @@ with tab2:
     st.divider()
     st.header("📊 2. 연대별 기자단 투표 성향 및 예외 조항")
     st.markdown("""
-    * **누적 스탯 프리미엄:** 현대 야구에서 투수의 분업화 등으로 인해 WAR 손해를 보더라도, **HOF Standards(누적 점수)가 압도적인 선수(투수 48점 이상 / 타자 55점 이상 / 포수 및 유격수 42점 이상)**는 3,000탈삼진, 250승, 혹은 포지션 누적 금자탑을 쌓은 것으로 간주하여 **최종 득표율에 1.12배 보너스 가중치**를 부여하고 비율스탯 감점을 면제합니다.
+    * **누적 스탯 프리미엄 (사바시아 조항):** 현대 야구에서 투수의 분업화 등으로 인해 WAR 손해를 보더라도, **HOF Standards(누적 점수)가 압도적인 선수(투수 48점 이상 / 타자 55점 이상 / 포수 및 유격수 42점 이상)**는 3,000탈삼진, 250승, 혹은 포지션 누적 금자탑을 쌓은 것으로 간주하여 **최종 득표율에 1.12배 보너스 가중치**를 부여하고 비율스탯 감점을 면제합니다.
     * **명전 전용 통계 (`Black/Gray Ink`, `Monitor`, `Standards`):** 포지션 수비 부담과 무관하게 타이틀 획득, 탑텐 랭크, 통산 올스타 선정 횟수 등을 다루므로 **명전 입성자 전체 평균값**을 일괄 적용하여 변별력을 높였습니다.
     * **세이버메트릭스 통계 (`WAR`, `Peak`, `JAWS`):** 포지션별 밸런스 붕괴를 막기 위해 **실제 수비 위치별 평균 합격 스탯**을 타겟팅하여 작동합니다.
     """)
