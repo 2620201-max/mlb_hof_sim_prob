@@ -7,13 +7,13 @@ from sklearn.linear_model import LogisticRegression
 @st.cache_resource
 def train_hof_ultimate_model():
     X = np.array([
-        [120, 450, 500, 95, 140.0, 70.0, 105.0], # 1. 지구 파괴급 신 (루스, 존슨, 메이스)
-        [60, 280, 320, 75, 100.0, 58.0, 79.0],  # 2. 올타임 슈퍼 레전드 (푸홀스, 마덕스)
-        [40, 200, 200, 60, 80.0, 48.0, 64.0],   # 3. 확실한 First Ballot (트라웃, 벨트레)
-        [25, 140, 130, 50, 65.0, 40.0, 52.5],   # 4. 정석적인 헌액자
-        [40, 185, 165, 50, 46.2, 41.2, 43.7],   # 5. 디지 딘형 (임팩트형)
-        [12, 120, 110, 45, 55.0, 36.0, 45.5],   # 6. 세페다형 / 세이버 경계선
-        [5, 60, 50, 30, 40.0, 28.0, 34.0]       # 7. 명전 미달자
+        [120, 450, 500, 95, 140.0, 70.0, 105.0], 
+        [60, 280, 320, 75, 100.0, 58.0, 79.0],  
+        [40, 200, 200, 60, 80.0, 48.0, 64.0],   
+        [25, 140, 130, 50, 65.0, 40.0, 52.5],   
+        [40, 185, 165, 50, 46.2, 41.2, 43.7],   
+        [12, 120, 110, 45, 55.0, 36.0, 45.5],   
+        [5, 60, 50, 30, 40.0, 28.0, 34.0]       
     ])
     y = np.array([1, 1, 1, 1, 1, 0, 0])
     
@@ -31,7 +31,6 @@ HOF_GLOBAL_AVG = {
     "HOFs": 50     
 }
 
-# AI 모델의 기저 기준 스케일 (기존 v4.4 타자/투수 표준 베이스라인)
 MODEL_BASE_WAR = {"타자": 67.0, "투수": 73.0}
 MODEL_BASE_PEAK = {"타자": 43.0, "투수": 50.0}
 MODEL_BASE_JAWS = {"타자": 55.0, "투수": 62.0}
@@ -51,8 +50,8 @@ POSITION_STATS = {
 }
 
 # --- 4. UI 구성 ---
-st.set_page_config(page_title="MLB HOF AI 통합 진단기 v4.92", layout="centered")
-st.title("🏛️ MLB HOF AI 통합 진단기 (v4.92 - 상위권 득표율 교정판)")
+st.set_page_config(page_title="MLB HOF AI 통합 진단기 v4.94", layout="centered")
+st.title("🏛️ MLB HOF AI 통합 진단기 (v4.94 - 세이버 스케일 동기화판)")
 
 tab1, tab2 = st.tabs(["🔍 HOF 정밀 진단", "📖 가이드 (데이터 검색 및 시대 설명)"])
 
@@ -86,14 +85,23 @@ with tab1:
         jaws = st.number_input(f"JAWS ({p_name} 평균: {avg['JAWS']})", value=float(avg["JAWS"]), step=0.1)
 
     if st.button("포지션 맞춤 AI 분석 실행"):
-        scaled_c_war = (c_war / avg['WAR']) * MODEL_BASE_WAR[pos_type]
-        scaled_p_war = (p_war / avg['Peak']) * MODEL_BASE_PEAK[pos_type]
-        scaled_jaws = (jaws / avg['JAWS']) * MODEL_BASE_JAWS[pos_type]
+        # ------------------ [핵심 교정: 입력단 스케일 교정 메커니즘] ------------------
+        # 개별 연산 시 발생하는 스케일 왜곡을 막기 위해, 포지션 평균 대비 현실적인 비율을 통합 적용
+        war_ratio = c_war / avg['WAR']
+        peak_ratio = p_war / avg['Peak']
+        jaws_ratio = jaws / avg['JAWS']
+        
+        # AI 모델의 베이스라인에 사용자의 포지션별 렐러티브(Relative) 비율을 엄격하게 투사
+        scaled_c_war = war_ratio * MODEL_BASE_WAR[pos_type]
+        scaled_p_war = peak_ratio * MODEL_BASE_PEAK[pos_type]
+        scaled_jaws = jaws_ratio * MODEL_BASE_JAWS[pos_type]
         
         input_data = np.array([[black, gray, hof_m, hof_s, scaled_c_war, scaled_p_war, scaled_jaws]])
         
+        # AI 확률 계산
         raw_prob = model.predict_proba(input_data)[0, 1] * 100
         
+        # 예외 조항 마일스톤 체크
         if pos_type == "투수":
             is_accumulation_monster = (hof_s >= 48) or (selected_pos == "구원투수 (RP)" and hof_m >= 120)
             war_threshold = avg['WAR'] * 0.75 if selected_pos == "선발투수 (SP)" else avg['WAR'] * 0.65
@@ -101,25 +109,31 @@ with tab1:
             is_accumulation_monster = (hof_s >= 55) or (selected_pos in ["포수 (C)", "유격수 (SS)"] and hof_s >= 42)
             war_threshold = avg['WAR'] * 0.75
             
-        if c_war < war_threshold and not is_accumulation_monster:
-            final_prob = min(raw_prob, 75.0)
+        # 세이버메트릭스가 깎였을 때 확률이 정직하게 무너지도록 동기화 디버프 적용
+        if war_ratio < 1.0 and not is_accumulation_monster:
+            penalty_factor = np.clip(war_ratio, 0.1, 1.0)
+            final_prob = raw_prob * (penalty_factor ** 2.0) # 감폭 민감도 상향
         else:
             final_prob = raw_prob
+        # ------------------------------------------------------------------------
             
+        # 2. 시대별 투표 기자단 성향 반영
+        sabermetrics_base = (jaws / avg['JAWS']) * 0.6 + (c_war / avg['WAR']) * 0.4
+        
         if era == "현대 세이버 야구 (2006-현재)":
-            sabermetrics = (jaws / avg['JAWS']) * 60
+            sabermetrics = sabermetrics_base * 60
             fame = (hof_m / HOF_GLOBAL_AVG['HOFm']) * 25
             longevity = (hof_s / HOF_GLOBAL_AVG['HOFs']) * 15
         elif era == "스테로이드 시대 (1993-2005)":
-            sabermetrics = (jaws / avg['JAWS']) * 40
+            sabermetrics = sabermetrics_base * 40
             fame = (hof_m / HOF_GLOBAL_AVG['HOFm']) * 20
             longevity = (hof_s / HOF_GLOBAL_AVG['HOFs']) * 40
         elif era == "데드볼/골든에이지 (~1946)":
-            sabermetrics = (jaws / avg['JAWS']) * 20
+            sabermetrics = sabermetrics_base * 20
             fame = (hof_m / HOF_GLOBAL_AVG['HOFm']) * 55
             longevity = (hof_s / HOF_GLOBAL_AVG['HOFs']) * 25
         else:
-            sabermetrics = (jaws / avg['JAWS']) * 40
+            sabermetrics = sabermetrics_base * 40
             fame = (hof_m / HOF_GLOBAL_AVG['HOFm']) * 40
             longevity = (hof_s / HOF_GLOBAL_AVG['HOFs']) * 20
         
@@ -127,26 +141,23 @@ with tab1:
         
         if is_accumulation_monster:
             vote_score *= 1.12
-        elif c_war < avg['WAR'] * 0.7:
-            vote_score *= 0.85
+        elif c_war < war_threshold:
+            vote_score *= max(0.5, war_ratio)
 
-        # ------------------ [핵심 교정 수식 변경] ------------------
-        # 선형 수식을 버리고, 상위권으로 갈수록 압축 저항이 발생하는 시그모이드 감쇠 곡선 적용
+        # 감쇠 곡선 기반 득표율 변환
         if vote_score >= 100:
-            # 평균 이상 구간: 75%에서 출발하여 vote_score가 대폭 높아야 95%~99%에 도달하도록 감쇠 조정
             est_vote = 75.0 + (24.9 / (1.0 + np.exp(-0.05 * (vote_score - 100))))
         else:
-            # 평균 미만 구간: 하락 곡선을 자연스럽게 연결
             est_vote = 5.0 + (70.0 / (1.0 + np.exp(-0.05 * (vote_score - 60))))
             
         est_vote = min(99.9, max(0.0, est_vote))
-        # --------------------------------------------------------
 
+        # 3. 결과 출력
         st.divider()
         res_col1, res_col2 = st.columns(2)
         res_col1.metric(f"최종 헌액 확률 ({selected_pos} 기준)", f"{final_prob:.1f}%")
         res_col2.metric("예상 최고 득표율 (기자단 경향 반영)", f"{est_vote:.1f}%")
-        st.progress(final_prob / 100)
+        st.progress(min(100.0, max(0.0, final_prob)) / 100)
 
         if est_vote >= 95.0:
             st.balloons()
