@@ -24,12 +24,11 @@ def train_hof_ultimate_model():
 model = train_hof_ultimate_model()
 
 # --- 2. 명예의 전당 통계 전체 평균값 정의 ---
-# 타자/투수 전체를 아우르는 HOF 통계의 기준 표준값
 HOF_GLOBAL_AVG = {
-    "Black": 27,   # 명전 입성자 전체 평균 Black Ink
-    "Gray": 144,   # 명전 입성자 전체 평균 Gray Ink
-    "HOFm": 100,   # 기준점 100
-    "HOFs": 50     # 기준점 50
+    "Black": 27,   
+    "Gray": 144,   
+    "HOFm": 100,   
+    "HOFs": 50     
 }
 
 # --- 3. 명예의 전당 입성자 실제 포지션별 세이버메트릭스 데이터셋 ---
@@ -47,10 +46,10 @@ POSITION_STATS = {
 }
 
 # --- 4. UI 구성 ---
-st.set_page_config(page_title="MLB HOF AI 통합 진단기 v4.8", layout="centered")
-st.title("🏛️ MLB HOF AI 통합 진단기 (v4.8 - HOF 잉크 전체평균 고정형)")
+st.set_page_config(page_title="MLB HOF AI 통합 진단기 v4.9", layout="centered")
+st.title("🏛️ MLB HOF 확률 계산기 (v4.9 - 통합 완전판)")
 
-tab1, tab2 = st.tabs(["🔍 HOF 정밀 진단", "📖 포지션별 데이터 가이드"])
+tab1, tab2 = st.tabs(["🔍 HOF 정밀 진단", "📖 가이드 (데이터 검색 및 시대 설명)"])
 
 with tab1:
     selected_pos = st.selectbox(
@@ -65,8 +64,8 @@ with tab1:
     
     # 데이터 매칭
     avg = POSITION_STATS[selected_pos]
-    p_name = avg["Name"]   # 포지션명 요약
-    pos_type = avg["Type"] # 타자 / 투수 구분
+    p_name = avg["Name"]   
+    pos_type = avg["Type"] 
     
     st.divider()
     
@@ -89,7 +88,7 @@ with tab1:
         # 1. AI 헌액 확률 계산
         raw_prob = model.predict_proba(input_data)[0, 1] * 100
         
-        # [누적 보정 프리미엄 규칙]
+        # [누적 보정 프리미엄 규칙] 포지션별 유연화 적용
         if pos_type == "투수":
             is_accumulation_monster = (hof_s >= 48) or (selected_pos == "구원투수 (RP)" and hof_m >= 120)
             war_threshold = avg['WAR'] * 0.75 if selected_pos == "선발투수 (SP)" else avg['WAR'] * 0.65
@@ -122,7 +121,7 @@ with tab1:
         
         vote_score = sabermetrics + fame + longevity
         
-        # 누적 페널티 조건 우회
+        # 누적 페널티 조건 및 보너스 적용 우회
         if is_accumulation_monster:
             vote_score *= 1.12
         elif c_war < avg['WAR'] * 0.7:
@@ -139,7 +138,7 @@ with tab1:
 
         if est_vote >= 95.0:
             st.balloons()
-            st.success(f"👑 **[FIRST BALLOT LOCK]** 명전 통합 통계 및 해당 포지션 가치를 완벽하게 장악한 만장일치급 레전드입니다.")
+            st.success(f"👑 **[FIRST BALLOT LOCK]** 명전 통합 통계 및 해당 포지션 가치를 완벽하게 장악한 만장일치급 레전드입니다. 첫해 입성 확실.")
         elif est_vote >= 85.0:
             st.balloons()
             st.success(f"🏆 **[HOF ELECT]** 해당 포지션의 최상위권 스타로 투표 첫해 혹은 초반 기수에 여유롭게 합격합니다.")
@@ -155,8 +154,19 @@ with tab1:
             st.error(f"❌ **[OUT OF RANGE]** 명전 투표 후보 리스트에 등록되는 것조차 어려운 하위 스탯입니다.")
 
 with tab2:
-    st.header("📊 명예의 전당 통계 설계 안내")
+    st.header("🔍 1. 데이터 검색 3단계 가이드")
     st.markdown("""
+    모든 스탯은 미국의 권위 있는 야구 통계 사이트인 **Baseball-Reference**에서 1분 만에 찾을 수 있습니다.
+    
+    * **1단계 (구글링):** 구글에 `[선수 영문 이름] + baseball reference` 검색 후 접속 (예: *C.C. Sabathia baseball reference*)
+    * **2단계 (스크롤):** 메인 기록 테이블들을 지나 아래쪽 **Leaderboards & Awards** 섹션으로 이동합니다.
+    * **3단계 (매칭):** **[Hall of Fame Statistics]** 테이블에 있는 7가지 항목을 그대로 입력창에 채워 넣습니다.
+    """)
+    
+    st.divider()
+    st.header("📊 2. 연대별 기자단 투표 성향 및 예외 조항")
+    st.markdown("""
+    * **누적 스탯 프리미엄:** 현대 야구에서 투수의 분업화 등으로 인해 WAR 손해를 보더라도, **HOF Standards(누적 점수)가 압도적인 선수(투수 48점 이상 / 타자 55점 이상 / 포수 및 유격수 42점 이상)**는 3,000탈삼진, 250승, 혹은 포지션 누적 금자탑을 쌓은 것으로 간주하여 **최종 득표율에 1.12배 보너스 가중치**를 부여하고 비율스탯 감점을 면제합니다.
     * **명전 전용 통계 (`Black/Gray Ink`, `Monitor`, `Standards`):** 포지션 수비 부담과 무관하게 타이틀 획득, 탑텐 랭크, 통산 올스타 선정 횟수 등을 다루므로 **명전 입성자 전체 평균값**을 일괄 적용하여 변별력을 높였습니다.
     * **세이버메트릭스 통계 (`WAR`, `Peak`, `JAWS`):** 포지션별 밸런스 붕괴를 막기 위해 **실제 수비 위치별 평균 합격 스탯**을 타겟팅하여 작동합니다.
     """)
