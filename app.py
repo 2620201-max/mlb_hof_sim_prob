@@ -3,30 +3,35 @@ import pandas as pd
 import numpy as np
 from sklearn.linear_model import LogisticRegression
 
-# --- 1. 비율 기반 AI 통합 모델 (거품 스탯 파훼 적용) ---
+# --- 1. AI 통합 모델 학습 ---
 @st.cache_resource
-def train_hof_adjusted_model():
-    # Features: [Ink_Ratio, Adjusted_Monitor, Standards_Ratio, WAR_Ratio, JAWS_Ratio]
+def train_hof_ultimate_model():
     X = np.array([
-        [2.5, 2.5, 1.5, 1.8, 1.8],  # 역대급 레전드 (100% 합격)
-        [1.2, 1.2, 1.1, 1.1, 1.1],  # 스탠다드 명전 (안정권)
-        [0.8, 1.0, 1.0, 1.0, 1.0],  # 턱걸이 명전
-        [0.4, 0.7, 1.1, 0.79, 0.77],# [시뮬레이션 학습] 모니터 거품이 제거된 빈껍데기 선수 (단호한 0)
-        [0.4, 0.7, 0.9, 1.1, 1.1],  # 세이버 달링
-        [1.5, 1.2, 0.8, 0.8, 0.9],  # 짧고 굵은 임팩트
-        [0.3, 0.6, 0.9, 0.6, 0.5]   # 누적만 챙긴 올스타 (탈락)
+        [120, 450, 500, 95, 140.0, 70.0, 105.0], # 1. 지구 파괴급 신 (루스, 존슨, 메이스)
+        [60, 280, 320, 75, 100.0, 58.0, 79.0],  # 2. 올타임 슈퍼 레전드 (푸홀스, 마덕스)
+        [40, 200, 200, 60, 80.0, 48.0, 64.0],   # 3. 확실한 First Ballot (트라웃, 벨트레)
+        [25, 140, 130, 50, 65.0, 40.0, 52.5],   # 4. 정석적인 헌액자
+        [40, 185, 165, 50, 46.2, 41.2, 43.7],   # 5. 디지 딘형 (임팩트형)
+        [12, 120, 110, 45, 55.0, 36.0, 45.5],   # 6. 세페다형 / 세이버 경계선
+        [5, 60, 50, 30, 40.0, 28.0, 34.0]       # 7. 명전 미달자
     ])
-    y = np.array([1, 1, 1, 0, 1, 1, 0])
+    y = np.array([1, 1, 1, 1, 1, 0, 0])
     
-    # AI 규제 강도를 높여 미달 스탯에 얄짤없이 반응하게 세팅 (C=0.5)
-    model = LogisticRegression(class_weight='balanced', C=0.5, max_iter=3000)
+    model = LogisticRegression(class_weight='balanced', C=0.005, max_iter=3000)
     model.fit(X, y)
     return model
 
-model = train_hof_adjusted_model()
+model = train_hof_ultimate_model()
 
-HOF_GLOBAL_AVG = {"Black": 27.0, "Gray": 144.0, "HOFm": 100.0, "HOFs": 50.0}
+# --- 2. 명예의 전당 통계 전체 평균값 정의 ---
+HOF_GLOBAL_AVG = {
+    "Black": 27,   
+    "Gray": 144,   
+    "HOFm": 100,   
+    "HOFs": 50     
+}
 
+# --- 3. 명예의 전당 입성자 실제 포지션별 세이버메트릭스 데이터셋 ---
 POSITION_STATS = {
     "포수 (C)": {"Name": "포수", "WAR": 53.8, "Peak": 34.4, "JAWS": 44.1, "Type": "타자"},
     "1루수 (1B)": {"Name": "1루수", "WAR": 65.5, "Peak": 41.8, "JAWS": 53.7, "Type": "타자"},
@@ -40,94 +45,145 @@ POSITION_STATS = {
     "구원투수 (RP)": {"Name": "구원", "WAR": 39.5, "Peak": 27.0, "JAWS": 33.3, "Type": "투수"}
 }
 
-st.set_page_config(page_title="MLB HOF AI 통합 진단기 v5.1", layout="centered")
-st.title("🏛️ MLB HOF AI 통합 진단기 (v5.1 - 자가 시뮬레이션 검증판)")
+# --- 4. UI 구성 ---
+st.set_page_config(page_title="MLB HOF AI 통합 진단기 v4.9.1", layout="centered")
+st.title("🏛️ MLB HOF AI 통합 진단기 (v4.9.1 - 득표율 연동판)")
 
-tab1, tab2 = st.tabs(["🔍 HOF 정밀 진단", "📖 가이드"])
+tab1, tab2 = st.tabs(["🔍 HOF 정밀 진단", "📖 가이드 (데이터 검색 및 시대 설명)"])
 
 with tab1:
-    selected_pos = st.selectbox("🏃 선수의 주 수비 포지션을 선택하세요", list(POSITION_STATS.keys()))
-    era = st.selectbox("선수의 주 활약 연대(시대) 선택", ["데드볼/골든에이지 (~1946)", "통합 및 확장기 (1947-1992)", "스테로이드 시대 (1993-2005)", "현대 세이버 야구 (2006-현재)"])
+    selected_pos = st.selectbox(
+        "🏃 선수의 주 수비 포지션을 선택하세요", 
+        list(POSITION_STATS.keys())
+    )
     
+    era = st.selectbox(
+        "선수의 주 활약 연대(시대) 선택",
+        ["데드볼/골든에이지 (~1946)", "통합 및 확장기 (1947-1992)", "스테로이드 시대 (1993-2005)", "현대 세이버 야구 (2006-현재)"]
+    )
+    
+    # 데이터 매칭
     avg = POSITION_STATS[selected_pos]
-    p_name, pos_type = avg["Name"], avg["Type"]
+    p_name = avg["Name"]   
+    pos_type = avg["Type"] 
     
     st.divider()
+    
+    # 값 입력 칸 구성
     c1, c2, c3 = st.columns(3)
     with c1:
-        black = st.number_input(f"Black Ink (평균: {int(HOF_GLOBAL_AVG['Black'])})", value=float(HOF_GLOBAL_AVG["Black"]), step=1.0)
-        gray = st.number_input(f"Gray Ink (평균: {int(HOF_GLOBAL_AVG['Gray'])})", value=float(HOF_GLOBAL_AVG["Gray"]), step=1.0)
+        black = st.number_input(f"Black Ink (전체 평균: {HOF_GLOBAL_AVG['Black']})", value=float(HOF_GLOBAL_AVG["Black"]), step=1.0)
+        gray = st.number_input(f"Gray Ink (전체 평균: {HOF_GLOBAL_AVG['Gray']})", value=float(HOF_GLOBAL_AVG["Gray"]), step=1.0)
     with c2:
-        hof_m = st.number_input(f"HOF Monitor (평균: {int(HOF_GLOBAL_AVG['HOFm'])})", value=float(HOF_GLOBAL_AVG["HOFm"]), step=1.0)
-        hof_s = st.number_input(f"HOF Standards (평균: {int(HOF_GLOBAL_AVG['HOFs'])})", value=float(HOF_GLOBAL_AVG["HOFs"]), step=1.0)
+        hof_m = st.number_input(f"HOF Monitor (전체 평균: {HOF_GLOBAL_AVG['HOFm']})", value=float(HOF_GLOBAL_AVG["HOFm"]), step=1.0)
+        hof_s = st.number_input(f"HOF Standards (전체 평균: {HOF_GLOBAL_AVG['HOFs']})", value=float(HOF_GLOBAL_AVG["HOFs"]), step=1.0)
     with c3:
         c_war = st.number_input(f"Career WAR ({p_name} 평균: {avg['WAR']})", value=float(avg["WAR"]), step=0.1)
         p_war = st.number_input(f"7yr-Peak WAR ({p_name} 평균: {avg['Peak']})", value=float(avg["Peak"]), step=0.1)
         jaws = st.number_input(f"JAWS ({p_name} 평균: {avg['JAWS']})", value=float(avg["JAWS"]), step=0.1)
 
     if st.button("포지션 맞춤 AI 분석 실행"):
-        ink_ratio = ((black / HOF_GLOBAL_AVG['Black']) + (gray / HOF_GLOBAL_AVG['Gray'])) / 2.0
-        monitor_ratio = hof_m / HOF_GLOBAL_AVG['HOFm']
-        standards_ratio = hof_s / HOF_GLOBAL_AVG['HOFs']
-        war_ratio = c_war / avg['WAR']
-        jaws_ratio = jaws / avg['JAWS']
+        input_data = np.array([[black, gray, hof_m, hof_s, c_war, p_war, jaws]])
         
-        # [핵심] 세이버(WAR, JAWS)가 평균 이하면, 모니터 점수도 그 비율만큼 강제로 후려침 (거품 제거)
-        saber_penalty = min(1.0, (war_ratio + jaws_ratio) / 2.0)
-        adjusted_monitor = monitor_ratio * saber_penalty
+        # 1. AI 원본 확률 계산
+        raw_prob = model.predict_proba(input_data)[0, 1] * 100
         
-        input_ratios = np.array([[ink_ratio, adjusted_monitor, standards_ratio, war_ratio, jaws_ratio]])
-        
-        # 거품을 뺀 상태로 AI가 정직하게 확률 판단
-        final_prob = model.predict_proba(input_ratios)[0, 1] * 100
-
-        # 투표 점수 계산 시에도 동일한 징벌 적용
+        # [누적 보정 프리미엄 규칙]
         if pos_type == "투수":
             is_accumulation_monster = (hof_s >= 48) or (selected_pos == "구원투수 (RP)" and hof_m >= 120)
+            war_threshold = avg['WAR'] * 0.75 if selected_pos == "선발투수 (SP)" else avg['WAR'] * 0.65
         else:
             is_accumulation_monster = (hof_s >= 55) or (selected_pos in ["포수 (C)", "유격수 (SS)"] and hof_s >= 42)
-
-        sabermetrics_base = (jaws_ratio * 0.6) + (war_ratio * 0.4)
-        
+            war_threshold = avg['WAR'] * 0.75
+            
+        # 2. 시대별 투표 기자단 성향 반영 및 예상 득표율 산출
         if era == "현대 세이버 야구 (2006-현재)":
-            vote_score = (sabermetrics_base * 60) + (adjusted_monitor * 25) + (standards_ratio * 15)
+            sabermetrics = (jaws / avg['JAWS']) * 60
+            fame = (hof_m / HOF_GLOBAL_AVG['HOFm']) * 25
+            longevity = (hof_s / HOF_GLOBAL_AVG['HOFs']) * 15
         elif era == "스테로이드 시대 (1993-2005)":
-            vote_score = (sabermetrics_base * 40) + (adjusted_monitor * 20) + (standards_ratio * 40)
+            sabermetrics = (jaws / avg['JAWS']) * 40
+            fame = (hof_m / HOF_GLOBAL_AVG['HOFm']) * 20
+            longevity = (hof_s / HOF_GLOBAL_AVG['HOFs']) * 40
         elif era == "데드볼/골든에이지 (~1946)":
-            vote_score = (sabermetrics_base * 20) + (adjusted_monitor * 55) + (standards_ratio * 25)
+            sabermetrics = (jaws / avg['JAWS']) * 20
+            fame = (hof_m / HOF_GLOBAL_AVG['HOFm']) * 55
+            longevity = (hof_s / HOF_GLOBAL_AVG['HOFs']) * 25
         else:
-            vote_score = (sabermetrics_base * 40) + (adjusted_monitor * 40) + (standards_ratio * 20)
+            sabermetrics = (jaws / avg['JAWS']) * 40
+            fame = (hof_m / HOF_GLOBAL_AVG['HOFm']) * 40
+            longevity = (hof_s / HOF_GLOBAL_AVG['HOFs']) * 20
+        
+        vote_score = sabermetrics + fame + longevity
         
         if is_accumulation_monster:
             vote_score *= 1.12
-        else:
-            if war_ratio < 1.0 or jaws_ratio < 1.0:
-                vote_score *= min(war_ratio, jaws_ratio)
+        elif c_war < avg['WAR'] * 0.7:
+            vote_score *= 0.85
 
-        # 득표율 변환
-        if vote_score >= 100:
-            est_vote = 75.0 + (24.9 / (1.0 + np.exp(-0.05 * (vote_score - 100))))
-        else:
-            est_vote = 5.0 + (70.0 / (1.0 + np.exp(-0.05 * (vote_score - 60))))
-            
-        est_vote = min(99.9, max(0.0, est_vote))
+        est_vote = min(99.9, (vote_score / 100) * 65 + 15)
 
+        # ------------------ [핵심 수정: 입성 확률을 득표율에 연동] ------------------
+        # 기자단 투표율(est_vote) 성향에 맞춰 최종 합격 확률(final_prob)을 캘리브레이션
+        if est_vote >= 75.0:
+            # 득표율 75% 이상(합격권) -> 확률은 최소 75%에서 최대 99.5%까지 매핑
+            f_prob = 75.0 + ((est_vote - 75.0) / (99.9 - 75.0)) * 24.5
+        elif est_vote >= 50.0:
+            # 득표율 50% ~ 75% (경계선 상위) -> 확률 45% ~ 75% 매핑
+            f_prob = 45.0 + ((est_vote - 50.0) / (75.0 - 50.0)) * 30.0
+        elif est_vote >= 5.0:
+            # 득표율 5% ~ 50% (경계선 하위 및 잔류) -> 확률 5% ~ 45% 매핑
+            f_prob = 5.0 + ((est_vote - 5.0) / (50.0 - 5.0)) * 40.0
+        else:
+            # 득표율 5% 미만 (광탈) -> 확률 0% ~ 5% 매핑
+            f_prob = (est_vote / 5.0) * 5.0
+
+        # 머신러닝 원본 확률과 기자단 기반 확률의 균형(Blended)을 맞추고 최종 컷오프 제한 적용
+        blended_prob = (raw_prob * 0.3) + (f_prob * 0.7)
+        
+        if c_war < war_threshold and not is_accumulation_monster:
+            final_prob = min(blended_prob, 75.0)
+        else:
+            final_prob = min(99.9, blended_prob)
+        # ------------------------------------------------------------------------
+
+        # 3. 결과 출력
         st.divider()
         res_col1, res_col2 = st.columns(2)
         res_col1.metric(f"최종 헌액 확률 ({selected_pos} 기준)", f"{final_prob:.1f}%")
         res_col2.metric("예상 최고 득표율 (기자단 경향 반영)", f"{est_vote:.1f}%")
-        st.progress(min(100.0, max(0.0, final_prob)) / 100)
+        st.progress(final_prob / 100)
 
         if est_vote >= 95.0:
-            st.success(f"👑 **[FIRST BALLOT LOCK]** 첫해 만장일치급 입성 확실.")
+            st.balloons()
+            st.success(f"👑 **[FIRST BALLOT LOCK]** 명전 통합 통계 및 해당 포지션 가치를 완벽하게 장악한 만장일치급 레전드입니다. 첫해 입성 확실.")
+        elif est_vote >= 85.0:
+            st.balloons()
+            st.success(f"🏆 **[HOF ELECT]** 해당 포지션의 최상위권 스타로 투표 첫해 혹은 초반 기수에 여유롭게 합격합니다.")
         elif est_vote >= 75.0:
-            st.info(f"⚾ **[SAFE ZONE]** 명예의 전당 안정권(75%) 획득.")
+            st.info(f"⚾ **[SAFE ZONE]** 명예의 전당 안정권(75%)을 획득했습니다. 쿠퍼스타운 입성이 확실합니다.")
         elif est_vote >= 60.0:
-            st.warning(f"⚠️ **[BORDERLINE - HIGH]** 베테랑 위원회 구제 유력.")
+            st.warning(f"⚠️ **[BORDERLINE - HIGH]** 누적 가치 혹은 세이버메트릭스 비율이 컷에 살짝 미달하나 장기 투표 혹은 베테랑 위원회 구제권입니다.")
+        elif est_vote >= 40.0:
+            st.warning(f"🤔 **[BORDERLINE - LOW]** 투표 유지선(5%)은 지키겠으나 매년 투표 마감 때마다 논쟁이 폭발할 잔류 그룹입니다.")
         elif est_vote >= 5.0:
-            st.error(f"❌ **[ONE AND DONE]** 기준치 미달, 광탈 위험.")
+            st.error(f"❌ **[ONE AND DONE]** 시대를 호령한 훌륭한 올스타 선수지만, 명예의 전당 기준 통계에는 미달하여 첫해 탈락 위험이 큽니다.")
         else:
-            st.error(f"❌ **[OUT OF RANGE]** 후보 등록조차 어려운 스탯입니다.")
+            st.error(f"❌ **[OUT OF RANGE]** 명전 투표 후보 리스트에 등록되는 것조차 어려운 하위 스탯입니다.")
 
 with tab2:
-    st.header("📊 가이드 생략")
+    st.header("🔍 1. 데이터 검색 3단계 가이드")
+    st.markdown("""
+    모든 스탯은 미국의 권위 있는 야구 통계 사이트인 **Baseball-Reference**에서 1분 만에 찾을 수 있습니다.
+    
+    * **1단계 (구글링):** 구글에 `[선수 영문 이름] + baseball reference` 검색 후 접속 (예: *C.C. Sabathia baseball reference*)
+    * **2단계 (스크롤):** 메인 기록 테이블들을 지나 아래쪽 **Leaderboards & Awards** 섹션으로 이동합니다.
+    * **3단계 (매칭):** **[Hall of Fame Statistics]** 테이블에 있는 7가지 항목을 그대로 입력창에 채워 넣습니다.
+    """)
+    
+    st.divider()
+    st.header("📊 2. 연대별 기자단 투표 성향 및 예외 조항")
+    st.markdown("""
+    * **누적 스탯 프리미엄 (사바시아 조항):** 현대 야구에서 투수의 분업화 등으로 인해 WAR 손해를 보더라도, **HOF Standards(누적 점수)가 압도적인 선수(투수 48점 이상 / 타자 55점 이상 / 포수 및 유격수 42점 이상)**는 3,000탈삼진, 250승, 혹은 포지션 누적 금자탑을 쌓은 것으로 간주하여 **최종 득표율에 1.12배 보너스 가중치**를 부여하고 비율스탯 감점을 면제합니다.
+    * **명전 전용 통계 (`Black/Gray Ink`, `Monitor`, `Standards`):** 포지션 수비 부담과 무관하게 타이틀 획득, 탑텐 랭크, 통산 올스타 선정 횟수 등을 다루므로 **명전 입성자 전체 평균값**을 일괄 적용하여 변별력을 높였습니다.
+    * **세이버메트릭스 통계 (`WAR`, `Peak`, `JAWS`):** 포지션별
